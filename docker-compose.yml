@@ -1,7 +1,7 @@
 version: '3.2'
 services:
   web:
-    image: martindevnow/${IMAGE_NAME}:${TAG}
+    image: aalmacin/${IMAGE_NAME}:${TAG}
     tty: true
     environment:
       - NODE_ENV=production
