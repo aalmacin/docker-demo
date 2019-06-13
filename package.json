@@ -7,6 +7,7 @@
     "build": "vue-cli-service build",
     "lint": "vue-cli-service lint",
     "test:e2e": "vue-cli-service test:e2e",
+    "test:lint-unit": "npm run lint && npm run test",
     "comment:local": "# === Development Commands === #",
     "build:dev": "docker build --target devBuild -t aalmacin/${npm_package_name}_dev:latest -f Dockerfile.dev .",
     "start:dev": "docker rm mdn_${npm_package_name}_dev_container || true && docker run --rm -it -p 8085:8085 --mount type=bind,src=`pwd`,dst=/usr/src/app -v /usr/src/app/node_modules --name mdn_${npm_package_name}_dev_container aalmacin/${npm_package_name}_dev:latest npm run serve",
