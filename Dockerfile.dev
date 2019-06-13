@@ -1,12 +1,27 @@
-# Base Image  
-FROM node:9.11.1
-
+FROM node:9.11.1 as devBuild
+ 
+## Set ENV Variables in the Image
 ENV NODE_ENV=development
-ENV PORT=8080
-
+ENV PORT=8085
+ENV BABEL_DISABLE_CACHE=1
+ 
+## Prep node_modules
+COPY package*.json /tmp/
+RUN cd /tmp && npm install
+ 
+## Prep application
 WORKDIR /usr/src/app
-COPY package*.json /usr/src/app/
-RUN cd /usr/src/app && CI=true npm install
+ 
+## Import Node Modules
+RUN cp -a /tmp/node_modules /usr/src/app/
+ 
+## Run
+EXPOSE 8085
+CMD [ "npm", "run", "serve" ]
+ 
+FROM node:9.11.1 as ciBuild
+WORKDIR /usr/src/app
+COPY . /usr/src/app/
+COPY --from=devBuild /usr/src/app/node_modules ./node_modules
+CMD [ "npm", "run", "serve" ]
 
-EXPOSE 8080
-CMD ["npm", "run", "serve"]
