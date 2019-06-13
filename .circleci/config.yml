@@ -1,0 +1,139 @@
+defaults: &defaults
+  machine:
+    docker_layer_caching: true
+
+version: 2.1
+commands:
+  setupenv:
+    description: "Simple command to Setup Environment Variables"
+    steps:
+      - checkout
+      - run: 
+          name: Setup Environment Variables
+          command: |
+            echo 'export TAG=${CIRCLE_SHA1}' >> $BASH_ENV
+            echo 'export IMAGE_NAME=docker_demo' >> $BASH_ENV
+  cache-app:
+    description: "Cache the Production Docker Image"
+    parameters:
+      cache:
+        type: boolean
+        default: false
+    steps:
+      - when:
+          condition: <<parameters.cache>>
+          steps:  
+            - run:
+                name: Save Docker Image
+                command: |
+                  mkdir -p docker-cache
+                  docker save -o docker-cache/built-image.tar aalmacin/$IMAGE_NAME:$TAG
+            - save_cache:
+                key: docker_cache_key-{{ .Environment.CIRCLE_SHA1 }}
+                paths:
+                  - docker-cache
+
+# Job Definition List 
+jobs:
+  unit-test:
+    <<: *defaults
+    steps:
+      - setupenv
+      - run:
+          name: Lint & Unit Test Application
+          command: |
+            npm run build:ci
+            npm run start:ci
+
+  build:
+    <<: *defaults
+    steps:
+      - setupenv
+      - run: 
+          name: Build Production Docker Image
+          command: |
+            npm run build:prod
+
+  build-and-cache:
+    <<: *defaults
+    steps:
+      - setupenv
+      - run: 
+          name: Build Production Docker Image
+          command: |
+            npm run build:prod
+      - cache-app:
+          cache: true
+
+  acceptance-test:
+    <<: *defaults
+    steps:
+      - setupenv
+      - restore_cache:
+          key: docker_cache_key-{{ .Environment.CIRCLE_SHA1 }}
+      - run:
+          name: Load Image from Docker Cache
+          command: |
+            docker load < docker-cache/built-image.tar
+      - run:
+          name: Run End-to-End Tests
+          command: |
+            mkdir -p ./results/$TAG/screenshots ./results/$TAG/videos
+            npm run build:cypress
+            npm run start:cypress
+      - store_artifacts:
+          path: ./results
+
+  publish:
+    <<: *defaults
+    steps:
+      - setupenv
+      - restore_cache:
+          key: docker_cache_key-{{ .Environment.CIRCLE_SHA1 }}
+      - run:
+          name: Load Image from Docker Cache
+          command: |
+            docker load < docker-cache/built-image.tar
+      - run:
+          name: Publish Docker Image
+          command: |
+            echo $DOCKER_PWD | docker login -u $DOCKER_LOGIN --password-stdin
+            docker push aalmacin/$IMAGE_NAME:$TAG
+
+workflows:
+  version: 2.1
+  build-test-acceptance-publish:
+    jobs:
+      - unit-test
+      - build:
+          requires:
+            - unit-test
+          filters:
+            branches:
+              ignore:
+                - develop
+                - master
+      - build-and-cache:
+          requires:
+            - unit-test
+          filters:
+            branches:
+              only:
+                - develop
+                - master
+      - acceptance-test:
+          requires:
+            - build-and-cache
+          filters:
+            branches:
+              only:
+                - develop
+                - master
+      - publish:
+          requires:
+            - acceptance-test
+          filters:
+            branches:
+              only:
+                - develop
+                - master
